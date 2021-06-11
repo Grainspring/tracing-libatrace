@@ -17,4 +17,4 @@ tracing = { version = "0.1.10" }
 tracing-core = { version = "0.1.10" }
 tracing-subscriber = { version = "0.2.5" }
 tracing-futures = { version = "0.2" }
-libatrace = { git = "https://github.com/Grainspring/tracing-libatrace.git" }
+libatrace = { git = "https://github.com/Grainspring/libatrace.git" }
