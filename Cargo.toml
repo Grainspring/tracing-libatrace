@@ -1,5 +1,5 @@
 [package]
-name = "tracing-atrace"
+name = "tracing-libatrace"
 version = "0.1.0"
 authors = ["Grain Spring<sukzhong@waterock.ai>"]
 edition = "2018"
