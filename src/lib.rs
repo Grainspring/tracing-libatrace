@@ -9,7 +9,7 @@
 //! [`tracing-subscriber::Layer`][layer] implementation for logging `tracing` spans
 //! and events to [`linux kernel debug tracing`][kernel debug tracing], on Linux distributions that
 //! use `debugfs`.
-//!  
+//!
 //! *Compiler support: [requires `rustc` 1.40+][msrv]*
 //!
 //! [msrv]: #supported-rust-versions
@@ -38,24 +38,27 @@
 use std::{fmt, fmt::Write, io};
 
 use libatrace::{trace_begin, trace_end, TRACE_BEGIN, TRACE_END};
-use tracing::{field, span, Span};
 use tracing_core::{
-    event::Event,
-    field::Visit,
+    field::{Field, Visit},
     span::{Attributes, Id, Record},
-    Field, Subscriber,
+    Event, Subscriber,
 };
-use tracing_futures::{Instrument, Instrumented};
-use tracing_subscriber::{layer::Context, registry::LookupSpan};
 
-pub struct Layer {
+use tracing::{field, Span};
+use tracing_futures::{Instrument, Instrumented};
+use tracing_subscriber::{
+    layer::{Context},
+    registry::{LookupSpan}
+};
+
+pub struct AtraceLayer {
     #[cfg(unix)]
     futobj_field: Option<String>,
     msg_field: Option<String>,
     data_field: Option<String>,
 }
 
-impl Layer {
+impl AtraceLayer {
     /// Construct a atrace layer
     ///
     pub fn new() -> io::Result<Self> {
@@ -83,43 +86,28 @@ impl Layer {
 }
 
 /// Construct a atrace layer
-pub fn layer() -> io::Result<Layer> {
-    Layer::new()
+pub fn layer() -> io::Result<AtraceLayer> {
+    AtraceLayer::new()
 }
 
-impl<S> tracing_subscriber::Layer<S> for Layer
+impl<S> tracing_subscriber::Layer<S> for AtraceLayer
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
-    fn new_span(&self, attrs: &Attributes, id: &Id, ctx: Context<S>) {
+    fn on_new_span(&self, attrs: &Attributes, id: &Id, ctx: Context<S>) {
         let span = ctx.span(id).expect("unknown span");
         let mut buf = String::new();
         write!(&mut buf, "{}", span.name()).unwrap();
 
-        // for get __fut fied value
-        let mut fut = String::new();
-        attrs.record(&mut SpanVisitor {
-            buf: &mut fut,
-            futobj_field: self.futobj_field.as_ref().map(|x| &x[..]),
-            data_field: None,
-        });
-
-        // for get data fied value
+        // for get all field value
         let mut data = String::new();
         attrs.record(&mut SpanVisitor {
             buf: &mut data,
             futobj_field: None,
-            data_field: self.data_field.as_ref().map(|x| &x[..]),
         });
 
-        // total output str
-        if fut.is_empty() {
-            write!(&mut buf, ",id:{:?}", id.into_u64()).unwrap();
-        } else {
-            write!(&mut buf, ",fut:{}", fut).unwrap();
-        }
         if !data.is_empty() {
-            write!(&mut buf, ",data:{}", data).unwrap();
+            write!(&mut buf, ",{}", data).unwrap();
         }
         span.extensions_mut().insert(SpanFields(buf));
     }
@@ -129,54 +117,40 @@ where
         let mut exts = span.extensions_mut();
         let old_buf = &mut exts.get_mut::<SpanFields>().expect("missing fields").0;
 
-        // for get __fut fied value
-        let mut fut = String::new();
-        values.record(&mut SpanVisitor {
-            buf: &mut fut,
-            futobj_field: self.futobj_field.as_ref().map(|x| &x[..]),
-            data_field: None,
-        });
-        // for get data fied value
+        // try to get new update
+        let mut buf = String::new();
+        write!(&mut buf, "{}", span.name()).unwrap();
         let mut data = String::new();
         values.record(&mut SpanVisitor {
             buf: &mut data,
-            data_field: self.data_field.as_ref().map(|x| &x[..]),
             futobj_field: None,
         });
+        if !data.is_empty() {
+            write!(&mut buf, ",{}", data).unwrap();
+        }
 
-        // update total output str
-        if !fut.is_empty() || !data.is_empty() {
-            let mut buf = String::new();
-            write!(&mut buf, "{}", span.name()).unwrap();
-
-            if fut.is_empty() {
-                write!(&mut buf, ",id:{:?}", id.into_u64()).unwrap();
-            } else {
-                write!(&mut buf, ",fut:{}", fut).unwrap();
-            }
-            if !data.is_empty() {
-                write!(&mut buf, ",data:{}", data).unwrap();
-            }
-            if buf != old_buf.as_ref() {
-                *old_buf = buf;
-            }
+        // if have new update, update it
+        if buf != old_buf.as_ref() {
+            *old_buf = buf;
         }
     }
 
     fn on_event(&self, event: &Event, _ctx: Context<S>) {
         let mut buf = String::new();
         // Record event fields
-        event.record(&mut EventVisitor::new(
-            &mut buf,
-            self.msg_field.as_ref().map(|x| &x[..]),
-        ));
+        event.record(&mut EventVisitor {
+            buf: &mut buf,
+            msg_field: None,
+        });
 
         #[cfg(unix)]
         TRACE_BEGIN!("{:?}", &buf);
+
+        #[cfg(unix)]
         TRACE_END!();
     }
 
-    fn on_enter(&self, id: &span::Id, ctx: Context<'_, S>) {
+    fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
         let first = ctx.span(id).expect("expected: span id exists in registry");
         let exts = first.extensions();
         let fields = exts.get::<SpanFields>().expect("missing fields");
@@ -185,9 +159,12 @@ where
         TRACE_BEGIN!("{:?}", &fields.0);
     }
 
-    fn on_exit(&self, _id: &span::Id, _ctx: Context<'_, S>) {
+    fn on_exit(&self, _id: &Id, _ctx: Context<'_, S>) {
         #[cfg(unix)]
         TRACE_END!();
+    }
+
+    fn on_close(&self, _id: Id, _ctx: Context<S>) {
     }
 }
 
@@ -196,7 +173,6 @@ struct SpanFields(String);
 struct SpanVisitor<'a> {
     buf: &'a mut String,
     futobj_field: Option<&'a str>,
-    data_field: Option<&'a str>,
 }
 
 impl Visit for SpanVisitor<'_> {
@@ -205,10 +181,19 @@ impl Visit for SpanVisitor<'_> {
             if futobj_field == field.name() {
                 write!(self.buf, "{:?}", value).unwrap();
             }
+            return;
         }
-        if let Some(data_field) = self.data_field {
-            if data_field == field.name() {
-                write!(self.buf, "{:?}", value).unwrap();
+        let buf = &mut self.buf;
+        let comma =  "";
+        match field.name() {
+            "message" => {
+                write!(buf, "{} {:?}", comma, value).unwrap();
+            }
+            // Skip fields that are actually log metadata that have already been handled
+            #[cfg(feature = "tracing-log")]
+            name if name.starts_with("log.") => {}
+            name => {
+                write!(buf, "{} {}={:?}", comma, name, value).unwrap();
             }
         }
     }
@@ -227,10 +212,17 @@ impl<'a> EventVisitor<'a> {
 
 impl Visit for EventVisitor<'_> {
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-        if let Some(msg_field) = self.msg_field {
-            if field.name() == msg_field {
-                // message
-                write!(self.buf, "{:?}", value).unwrap();
+        let buf = &mut self.buf;
+        let comma =  "";
+        match field.name() {
+            "message" => {
+                write!(buf, "{:?} {}", value, comma).unwrap();
+            }
+            // Skip fields that are actually log metadata that have already been handled
+            #[cfg(feature = "tracing-log")]
+            name if name.starts_with("log.") => {}
+            name => {
+                write!(buf, "{}={:?} {}", name, value, comma).unwrap();
             }
         }
     }

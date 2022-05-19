@@ -12,9 +12,38 @@ categories = [
 ]
 keywords = ["tracing", "kenel debug tracing", "debugfs"]
 
+[features]
+default = ["tracing-log"]
+
+[dependencies.tracing-core]
+version = "0.1"
+
+[dependencies.tracing-log]
+version = "0.1"
+optional = true
+
+[dependencies.tracing-subscriber]
+version = "0.3"
+features = ["registry", "fmt", "std"]
+default-features = false
+
+[dependencies.tracing-futures]
+version = "0.2"
+
 [dependencies]
 tracing = { version = "0.1.10" }
-tracing-core = { version = "0.1.10" }
-tracing-subscriber = { version = "0.2.5" }
-tracing-futures = { version = "0.2" }
 libatrace = { git = "https://github.com/Grainspring/libatrace.git" }
+
+[dev-dependencies]
+tracing = "0.1"
+futures = "0.3.0"
+futures-core = "0.3"
+tokio = { version = "0.2.12", features = ["full", "tracing"] }
+tokio-util = { version = "0.2.0", features = ["full"] }
+bytes = { version = "0.5.6", features = [] }
+tracing-attributes =  "0.1.2"
+tracing-futures =  { version = "0.2.1", features = ["futures-01"] }
+
+[[example]]
+name="chat"
+path="examples/chat.rs"
