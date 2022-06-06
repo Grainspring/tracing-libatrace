@@ -144,7 +144,7 @@ where
         });
 
         #[cfg(unix)]
-        TRACE_BEGIN!("{:?}", &buf);
+        TRACE_BEGIN!("{}", &buf);
 
         #[cfg(unix)]
         TRACE_END!();
@@ -154,9 +154,8 @@ where
         let first = ctx.span(id).expect("expected: span id exists in registry");
         let exts = first.extensions();
         let fields = exts.get::<SpanFields>().expect("missing fields");
-        // println!("on_enter:{}", fields.0);
         #[cfg(unix)]
-        TRACE_BEGIN!("{:?}", &fields.0);
+        TRACE_BEGIN!("{}", &fields.0);
     }
 
     fn on_exit(&self, _id: &Id, _ctx: Context<'_, S>) {
