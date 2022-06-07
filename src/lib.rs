@@ -46,15 +46,10 @@ use tracing_core::{
 
 use tracing::{field, Span};
 use tracing_futures::{Instrument, Instrumented};
-use tracing_subscriber::{
-    layer::{Context},
-    registry::{LookupSpan}
-};
+use tracing_subscriber::{layer::Context, registry::LookupSpan};
 
 pub struct AtraceLayer {
     #[cfg(unix)]
-    futobj_field: Option<String>,
-    msg_field: Option<String>,
     data_field: Option<String>,
 }
 
@@ -64,11 +59,7 @@ impl AtraceLayer {
     pub fn new() -> io::Result<Self> {
         #[cfg(unix)]
         {
-            Ok(Self {
-                futobj_field: Some("__fut".into()),
-                msg_field: Some("message".into()),
-                data_field: None,
-            })
+            Ok(Self { data_field: None })
         }
         #[cfg(not(unix))]
         Err(io::Error::new(
@@ -138,10 +129,7 @@ where
     fn on_event(&self, event: &Event, _ctx: Context<S>) {
         let mut buf = String::new();
         // Record event fields
-        event.record(&mut EventVisitor {
-            buf: &mut buf,
-            msg_field: None,
-        });
+        event.record(&mut EventVisitor { buf: &mut buf });
 
         #[cfg(unix)]
         TRACE_BEGIN!("{}", &buf);
@@ -163,8 +151,7 @@ where
         TRACE_END!();
     }
 
-    fn on_close(&self, _id: Id, _ctx: Context<S>) {
-    }
+    fn on_close(&self, _id: Id, _ctx: Context<S>) {}
 }
 
 struct SpanFields(String);
@@ -183,7 +170,7 @@ impl Visit for SpanVisitor<'_> {
             return;
         }
         let buf = &mut self.buf;
-        let comma =  "";
+        let comma = "";
         match field.name() {
             "message" => {
                 write!(buf, "{} {:?}", comma, value).unwrap();
@@ -200,19 +187,12 @@ impl Visit for SpanVisitor<'_> {
 
 struct EventVisitor<'a> {
     buf: &'a mut String,
-    msg_field: Option<&'a str>,
-}
-
-impl<'a> EventVisitor<'a> {
-    fn new(buf: &'a mut String, msg_field: Option<&'a str>) -> Self {
-        Self { buf, msg_field }
-    }
 }
 
 impl Visit for EventVisitor<'_> {
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         let buf = &mut self.buf;
-        let comma =  "";
+        let comma = "";
         match field.name() {
             "message" => {
                 write!(buf, "{:?} {}", value, comma).unwrap();
