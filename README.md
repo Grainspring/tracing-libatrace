@@ -13,7 +13,7 @@ After instrumenting your app with
 [tracing](https://github.com/tokio-rs/tracing), add this subscriber like this:
 
 ```rust
-let subscriber = tracing_subscriber::Registry::default().with(tracing_libatrace::layer());
+let subscriber = tracing_subscriber::Registry::default().with(tracing_libatrace::layer().unwrap());
 tracing::subscriber::set_global_default(subscriber).unwrap();
 ```
 ## Other
