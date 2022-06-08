@@ -139,8 +139,8 @@ where
     }
 
     fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
-        let first = ctx.span(id).expect("expected: span id exists in registry");
-        let exts = first.extensions();
+        let span = ctx.span(id).expect("expected: span id exists in registry");
+        let exts = span.extensions();
         let fields = exts.get::<SpanFields>().expect("missing fields");
         #[cfg(unix)]
         TRACE_BEGIN!("{}", &fields.0);
@@ -151,7 +151,11 @@ where
         TRACE_END!();
     }
 
-    fn on_close(&self, _id: Id, _ctx: Context<S>) {}
+    fn on_close(&self, id: Id, ctx: Context<S>) {
+        let span = ctx.span(&id).expect("expected: span id exists in registry");
+        let mut exts = span.extensions_mut();
+        exts.remove::<SpanFields>().expect("missing fields");
+    }
 }
 
 struct SpanFields(String);

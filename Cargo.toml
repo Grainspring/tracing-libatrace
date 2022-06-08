@@ -32,7 +32,7 @@ version = "0.2"
 
 [dependencies]
 tracing = { version = "0.1.10" }
-libatrace = { git = "https://github.com/Grainspring/libatrace.git" }
+libatrace = { version = "0.1.0" }
 
 [dev-dependencies]
 tracing = "0.1"
